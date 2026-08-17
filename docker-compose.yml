@@ -1,0 +1,34 @@
+services:
+  library_api:
+    build:
+      context: .
+      dockerfile: library_api/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      # Single source of truth for catalog.json + covers/ + books/.
+      # Read-write: this container is now the one doing the actual
+      # ingest work (POST /internal/ingest), triggered by the portrait
+      # bot rather than a Discord connection of its own. Must be a named
+      # volume, not the container's writable layer -- losing it means
+      # every story has to be re-forwarded from Discord history, which
+      # isn't automated (see README "Porting to another machine").
+      - library_data:/data
+    ports:
+      - "${LIBRARY_API_PORT:-8083}:8000"
+    networks:
+      - default
+      # Shared with auldwyn-portrait-bot's `bot` service so it can reach
+      # this container by name (http://library_api:8000/internal/ingest)
+      # without going out through the host's published port. Created
+      # once with `docker network create auldwyn-net` -- see README.
+      - auldwyn-net
+    mem_limit: 512m
+    cpus: "1.0"
+
+volumes:
+  library_data:
+
+networks:
+  auldwyn-net:
+    external: true
