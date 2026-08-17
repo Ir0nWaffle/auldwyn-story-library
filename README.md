@@ -66,6 +66,41 @@ seed/
    `LIBRARY_API_URL=http://library_api:8000`, then redeploy that stack.
    See its README for the story-forwarding section.
 
+## Public access (Tailscale Funnel)
+
+Player-facing consumers (the picker app, KOReader) run on machines
+outside this LAN, so `library_api` needs a real public URL. This box
+already runs Tailscale with Funnel enabled for two other Auldwyn
+services, each on one of the only three ports Funnel allows (`443`,
+`8443`, `10000`) — all three already taken. Rather than a fourth port
+(not possible), this is mounted as a **path** on the already-funneled
+`:8443` (alongside `auldwyn-web-chat` at `/`):
+
+```
+https://waffleserver1.tail04c8c3.ts.net:8443/library/
+```
+set up via:
+```bash
+tailscale funnel --https=8443 --set-path=/library --bg http://127.0.0.1:8083
+```
+**Use `tailscale funnel`, not `tailscale serve`, for this.** Running
+`serve` against a port that already has Funnel enabled silently drops
+that port's Funnel flag as a side effect (confirmed the hard way —
+briefly took `web_chat` off the public internet before switching to
+`funnel`, which restores/keeps `AllowFunnel` correctly). Check
+`tailscale serve status --json`'s `AllowFunnel` block after any change to
+this if it's ever touched again.
+
+**`PUBLIC_URL_PREFIX=/library`** in `.env` matters because of this
+mount shape: Tailscale strips the `/library` prefix before forwarding to
+the container, so the app itself has no way to know it's published at a
+sub-path — without this, the convenience URLs in `GET /api/stories` and
+`/feed.xml` (`cover_url`, `epub_url`, `kepub_url`, the feed's enclosure
+links) would come back as bare `/covers/{id}` etc., which 404 when a
+client (correctly) hits them against the public host. Only affects those
+generated URL strings — the routes themselves (`GET /covers/{id}`, ...)
+are unprefixed and work the same locally either way.
+
 ## Title / author / cover convention
 
 Enforced on the portrait bot's side (`pipeline/story_forward.py`), since
@@ -122,11 +157,44 @@ named-volume persistence across a full stack teardown/`up`.
   reach each other over the shared network, not just that each one
   works in isolation.
 
+**2026-08-17, security pass before going public + Tailscale Funnel**:
+- Found and fixed two real issues while reviewing before public exposure
+  (not hypothetical — both verified against the live container):
+  - `story_id` flowed unsanitized into filenames written under `DATA_DIR`
+    — harmless with the portrait bot as the only caller (always sends a
+    plain numeric Discord id), but a real path-traversal risk once the
+    token becomes the only barrier against an internet-facing caller.
+    Fixed with a strict allowlist regex (`^[A-Za-z0-9_-]{1,128}$`),
+    checked before any file touches disk. Verified: a
+    `../../../../tmp/pwned` attempt got `400` and nothing was written
+    outside `DATA_DIR`; a real numeric id still works.
+  - Token comparison was `!=` (not constant-time). Switched to
+    `hmac.compare_digest`. Re-verified wrong/missing tokens still `403`.
+- Published via Tailscale Funnel path-mount on `:8443` (see "Public
+  access" above). **Caught a real deployment mistake in the process**:
+  the first attempt used `tailscale serve` instead of `tailscale funnel`,
+  which silently dropped `web_chat`'s existing public Funnel flag on that
+  same port as a side effect — caught immediately via
+  `tailscale serve status --json`'s `AllowFunnel` block, fixed by
+  reapplying with `funnel`, and re-verified all three previously-public
+  endpoints (`web_chat` root, `query_api` on `:10000`, and the new
+  `/library` path) all return `200`/real data over the actual public
+  HTTPS URL, not just `localhost`.
+- Found and fixed a second real bug this surfaced: `cover_url` /
+  `epub_url` / `kepub_url` / feed enclosure links were generated as bare
+  `/covers/{id}` etc., which 404 when accessed at the real public path
+  (Tailscale strips its own path prefix before forwarding, so the app had
+  no way to know it's mounted at `/library`). Added `PUBLIC_URL_PREFIX`;
+  verified by fetching `/api/stories` from the real public URL, taking
+  the exact `cover_url` string it returned, and confirming that exact
+  URL downloads real cover bytes — not just that the field looks right.
+
 **Not yet verified**: the portrait bot's real Discord-side trigger (a
 message posted in `#stories` on the actual server, going through
 `on_message`/`on_message_edit` end to end) — no channel ID is configured
 yet. Everything on this repo's side of that boundary (the HTTP endpoint
-itself) is verified as above.
+itself, and now the public path it's actually reachable at) is verified
+as above.
 
 ## Only Linux kepubify is bundled
 

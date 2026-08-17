@@ -43,6 +43,18 @@ app = FastAPI(title="Auldwyn Story Library")
 
 INTERNAL_API_TOKEN = os.environ.get("INTERNAL_API_TOKEN", "")
 
+# This container's own routes are unprefixed (e.g. GET /covers/{id}) --
+# that's correct for local/direct access (curl http://localhost:8083/...,
+# the portrait bot over the docker network) but wrong for the public
+# Tailscale Funnel path mount, which strips its own prefix before
+# forwarding, so the app has no built-in way to know it's mounted at
+# .../library publicly. Rather than guess, this is explicit: set to
+# "/library" in .env to match how it's actually published (see README),
+# blank if serving from the bare root. Only affects the convenience URL
+# fields returned in JSON/the Atom feed below -- the real routes
+# themselves are unaffected either way.
+PUBLIC_URL_PREFIX = os.environ.get("PUBLIC_URL_PREFIX", "").rstrip("/")
+
 # story_id ends up directly in generated filenames (see common/ingest.py:
 # f"{story_id}-{content_hash}.png" etc, written under DATA_DIR). The only
 # caller today (the portrait bot) always sends a plain Discord snowflake
@@ -70,9 +82,9 @@ def list_stories():
             "author": s.author,
             "summary": s.summary,
             "updated": s.updated,
-            "cover_url": f"/covers/{s.id}",
-            "epub_url": f"/books/{s.id}.epub",
-            "kepub_url": f"/books/{s.id}.kepub.epub" if s.kepub_file else None,
+            "cover_url": f"{PUBLIC_URL_PREFIX}/covers/{s.id}",
+            "epub_url": f"{PUBLIC_URL_PREFIX}/books/{s.id}.epub",
+            "kepub_url": f"{PUBLIC_URL_PREFIX}/books/{s.id}.kepub.epub" if s.kepub_file else None,
         }
         for s in stories
     ]
@@ -182,7 +194,7 @@ def atom_feed():
     <updated>{escape(s.updated)}</updated>
     <author><name>{escape(s.author)}</name></author>
     <summary>{escape(s.summary)}</summary>
-    <link rel="enclosure" type="application/epub+zip" href="/books/{escape(s.id)}.epub"/>
+    <link rel="enclosure" type="application/epub+zip" href="{escape(PUBLIC_URL_PREFIX)}/books/{escape(s.id)}.epub"/>
   </entry>"""
         for s in stories
     )
