@@ -15,6 +15,7 @@ class Story:
     cover_file: str  # filename within DATA_DIR/covers/
     epub_file: str  # filename within DATA_DIR/books/
     kepub_file: str | None  # filename within DATA_DIR/books/, None if kepubify unavailable
+    azw3_file: str | None = None  # filename within DATA_DIR/books/, None if calibre_converter unavailable
 
     def to_dict(self) -> dict:
         return asdict(self)

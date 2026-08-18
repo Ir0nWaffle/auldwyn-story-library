@@ -10,6 +10,8 @@ import hashlib
 from pathlib import Path
 
 from . import storage
+from .authors import format_authors
+from .azw3 import to_azw3
 from .cover_gen import make_cover
 from .epub_builder import build_epub
 from .kepub import to_kepub
@@ -19,25 +21,37 @@ from .models import Story
 def ingest_story(
     story_id: str,
     title: str,
-    author: str,
+    authors: list[str],
     text: str,
     updated_iso: str,
     summary: str | None = None,
     image_bytes: bytes | None = None,
 ) -> Story:
+    """`authors` is the full, ordered, de-duplicated list for this story --
+    the caller (portrait bot's thread-assembly logic) is responsible for
+    deciding who that is; this function just renders whatever it's given.
+    One dc:creator per author in the EPUB; `format_authors()` produces the
+    single display string used for the cover byline and the catalog's
+    `author` field.
+    """
     storage.ensure_dirs()
 
     content_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
     existing = storage.get_story(story_id)
     if existing and existing.content_hash == content_hash:
         # Unchanged text on a re-save/edit event -- nothing to rebuild.
+        # (A change in `authors` with no change in `text` can't happen in
+        # practice: a new contributor's segment is what changes the text
+        # in the first place -- see the portrait bot's assemble_story().)
         return existing
 
     if summary is None:
         first_line = next((l.strip() for l in text.splitlines() if l.strip()), "")
         summary = (first_line[:157] + "...") if len(first_line) > 160 else first_line
 
-    cover_bytes = make_cover(title, author, image_bytes)
+    author_display = format_authors(authors)
+
+    cover_bytes = make_cover(title, author_display, image_bytes)
     cover_filename = f"{story_id}-{content_hash}.png"
     (storage.COVERS_DIR / cover_filename).write_bytes(cover_bytes)
 
@@ -46,7 +60,7 @@ def ingest_story(
     build_epub(
         story_id=story_id,
         title=title,
-        author=author,
+        authors=authors,
         summary=summary,
         updated_iso=updated_iso,
         text=text,
@@ -56,10 +70,21 @@ def ingest_story(
 
     kepub_path = to_kepub(epub_path, storage.BOOKS_DIR)
 
+    # Unlike to_kepub, conversion doesn't happen in this process -- see
+    # common/azw3.py's docstring for why (the calibre_converter sidecar
+    # does the actual work and hands back finished bytes over HTTP), so
+    # this is the one format we write to BOOKS_DIR ourselves rather than
+    # the converter writing there directly.
+    azw3_bytes = to_azw3(epub_path.read_bytes())
+    azw3_filename = None
+    if azw3_bytes is not None:
+        azw3_filename = f"{story_id}-{content_hash}.azw3"
+        (storage.BOOKS_DIR / azw3_filename).write_bytes(azw3_bytes)
+
     story = Story(
         id=story_id,
         title=title,
-        author=author,
+        author=author_display,
         summary=summary,
         updated=updated_iso,
         content_hash=content_hash,
@@ -67,6 +92,7 @@ def ingest_story(
         cover_file=cover_filename,
         epub_file=epub_filename,
         kepub_file=kepub_path.name if kepub_path else None,
+        azw3_file=azw3_filename,
     )
     storage.upsert_story(story)
     return story

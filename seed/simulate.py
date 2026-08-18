@@ -22,14 +22,14 @@ SAMPLE_STORIES = [
     dict(
         story_id="salt-road-confession",
         title="The Salt Road Confession",
-        author="Corvin Ashgrove",
+        authors=["Corvin Ashgrove"],
         text_file="salt-road-confession.txt",
         image_file=None,
     ),
     dict(
         story_id="river-of-glass",
         title="The River of Glass",
-        author="Wren Talbot",
+        authors=["Wren Talbot"],
         text_file="river-of-glass.txt",
         image_file="river-of-glass-player-art.png",
     ),
@@ -47,7 +47,7 @@ def main():
         story = ingest_story(
             story_id=entry["story_id"],
             title=entry["title"],
-            author=entry["author"],
+            authors=entry["authors"],
             text=text,
             updated_iso=now,
             image_bytes=image_bytes,

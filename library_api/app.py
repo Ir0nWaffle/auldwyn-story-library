@@ -16,8 +16,8 @@ Two trust levels in one app:
     Only the portrait bot is expected to hold that token.
 
 Consumed by:
-  - the desktop picker app (GET /api/stories, GET /books/{id}.epub or
-    /books/{id}.kepub.epub)
+  - the desktop picker app (GET /api/stories, GET /books/{id}.epub,
+    /books/{id}.kepub.epub, or /books/{id}.azw3)
   - KOReader's News Downloader / any OPDS-ish reader (GET /feed.xml)
   - the portrait bot (POST /internal/ingest)
 """
@@ -85,6 +85,7 @@ def list_stories():
             "cover_url": f"{PUBLIC_URL_PREFIX}/covers/{s.id}",
             "epub_url": f"{PUBLIC_URL_PREFIX}/books/{s.id}.epub",
             "kepub_url": f"{PUBLIC_URL_PREFIX}/books/{s.id}.kepub.epub" if s.kepub_file else None,
+            "azw3_url": f"{PUBLIC_URL_PREFIX}/books/{s.id}.azw3" if s.azw3_file else None,
         }
         for s in stories
     ]
@@ -116,6 +117,23 @@ def get_kepub(story_id: str):
     )
 
 
+@app.get("/books/{story_id}.azw3")
+def get_azw3(story_id: str):
+    # No route-ordering hazard here the way get_kepub above has with
+    # get_epub below: ".azw3" doesn't end in ".epub", so Starlette's
+    # greedy {story_id} match on the generic route can never accidentally
+    # swallow this one regardless of registration order. Kept up here
+    # anyway to group the three /books/{id}.* routes together.
+    story = storage.get_story(story_id)
+    if not story or not story.azw3_file:
+        raise HTTPException(404, "no azw3 available for this story")
+    return FileResponse(
+        storage.BOOKS_DIR / story.azw3_file,
+        media_type="application/x-mobi8-ebook",
+        filename=f"{story.title}.azw3",
+    )
+
+
 @app.get("/books/{story_id}.epub")
 def get_epub(story_id: str):
     story = storage.get_story(story_id)
@@ -132,7 +150,7 @@ def get_epub(story_id: str):
 async def internal_ingest(
     story_id: str = Form(...),
     title: str = Form(...),
-    author: str = Form(...),
+    authors: list[str] = Form(...),  # repeated form field, one per author, in order
     text: str = Form(...),
     updated: str | None = Form(None),
     image: UploadFile | None = None,
@@ -162,10 +180,13 @@ async def internal_ingest(
     image_bytes = await image.read() if image is not None else None
     updated_iso = updated or datetime.now(timezone.utc).isoformat()
 
+    if not authors or not any(a.strip() for a in authors):
+        raise HTTPException(400, "authors must contain at least one non-empty name")
+
     story = ingest_story(
         story_id=story_id,
         title=title,
-        author=author,
+        authors=authors,
         text=text,
         updated_iso=updated_iso,
         image_bytes=image_bytes,
@@ -177,6 +198,7 @@ async def internal_ingest(
         "cover_file": story.cover_file,
         "epub_file": story.epub_file,
         "kepub_file": story.kepub_file,
+        "azw3_file": story.azw3_file,
     }
 
 

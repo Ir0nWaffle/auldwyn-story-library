@@ -26,6 +26,24 @@ services:
     mem_limit: 512m
     cpus: "1.0"
 
+  calibre_converter:
+    build:
+      context: .
+      dockerfile: calibre_converter/Dockerfile
+    restart: unless-stopped
+    networks:
+      # Internal only -- no ports: published, no host port mapping.
+      # Reached by library_api at http://calibre_converter:8000 (see
+      # CALIBRE_CONVERTER_URL in .env.example), same shared-network
+      # convention library_api and the portrait bot already use.
+      - auldwyn-net
+    # Stock Calibre wants real headroom to run ebook-convert -- a
+    # different order of magnitude than library_api's own 512m above.
+    # No volume: this service is stateless, one epub in over HTTP, one
+    # azw3 back out, nothing written that needs to survive a restart.
+    mem_limit: 2g
+    cpus: "1.0"
+
 volumes:
   library_data:
 

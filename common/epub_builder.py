@@ -4,6 +4,8 @@ from pathlib import Path
 
 from ebooklib import epub
 
+from .authors import format_authors
+
 HERE = Path(__file__).resolve().parent
 A_MARK = HERE / "assets" / "auldwyn-A-mark.png"
 
@@ -11,7 +13,7 @@ A_MARK = HERE / "assets" / "auldwyn-A-mark.png"
 def build_epub(
     story_id: str,
     title: str,
-    author: str,
+    authors: list[str],
     summary: str,
     updated_iso: str,
     text: str,
@@ -22,7 +24,8 @@ def build_epub(
     book.set_identifier(f"auldwyn-{story_id}")
     book.set_title(title)
     book.set_language("en")
-    book.add_author(author)
+    for a in authors:
+        book.add_author(a)  # one dc:creator entry per author, not one joined string
     book.add_metadata("DC", "publisher", "Auldwyn")
     book.add_metadata("DC", "date", updated_iso)
     book.add_metadata("DC", "subject", "Auldwyn")
@@ -38,13 +41,14 @@ def build_epub(
     )
     book.add_item(a_mark_item)
 
+    author_display = format_authors(authors)
     title_page = epub.EpubHtml(title="Title Page", file_name="title.xhtml")
     title_page.content = f"""
       <html><body style="text-align:center; padding-top:15%;">
         <img src="images/a-mark.png" alt="Auldwyn" style="width:20%;"/>
         <h1>{title}</h1>
         <p style="font-style:italic;">an Auldwyn story</p>
-        <p>by {author}</p>
+        <p>by {author_display}</p>
       </body></html>
     """
     book.add_item(title_page)
