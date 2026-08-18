@@ -31,7 +31,15 @@ def build_epub(
     book.add_metadata("DC", "subject", "Auldwyn")
     book.add_metadata("DC", "description", summary)
 
-    book.set_cover("cover.jpg", cover_png_bytes)
+    # cover_gen always produces PNG bytes (see cover_gen.py's `format="PNG"`
+    # saves) -- the file name here has to match that real format, not just
+    # look like a plausible cover name. ebooklib doesn't inspect the bytes;
+    # it guesses the OPF manifest's media-type from this extension, so a
+    # ".jpg" name on PNG content declared the cover as image/jpeg while
+    # shipping PNG bytes. Readers that trust the declared type over the
+    # actual bytes (Kobo's Nickel, Calibre's azw3 conversion) then fail to
+    # decode it and render a blank box instead of the cover.
+    book.set_cover("cover.png", cover_png_bytes)
 
     a_mark_item = epub.EpubItem(
         uid="a_mark",
