@@ -63,3 +63,40 @@ def get_story(story_id: str) -> Story | None:
         if s.id == story_id:
             return s
     return None
+
+
+def delete_story(story_id: str) -> bool:
+    """Removes a catalog entry and its cover/epub/kepub/azw3 files.
+
+    Used to retire an entry whose originating Discord thread has been
+    deleted outright (as opposed to a message within it, which just
+    triggers a reassembly) -- see the portrait bot's
+    on_thread_delete/on_raw_thread_delete handlers. Without this, a
+    delete-and-repost (rather than an in-place edit) leaves the old
+    thread's entry behind forever as an orphan, duplicating whatever
+    the new post creates (found for real 2026-08-19, cleaned up by hand
+    before this function existed).
+
+    Returns True if something was actually removed, False if `story_id`
+    wasn't in the catalog to begin with (already retired, or never made
+    it in -- e.g. every message in the thread was short enough to count
+    as a comment).
+    """
+    stories = load_catalog()
+    match = next((s for s in stories if s.id == story_id), None)
+    if match is None:
+        return False
+
+    remaining = [s for s in stories if s.id != story_id]
+    save_catalog(remaining)
+
+    for filename, directory in (
+        (match.cover_file, COVERS_DIR),
+        (match.epub_file, BOOKS_DIR),
+        (match.kepub_file, BOOKS_DIR),
+        (match.azw3_file, BOOKS_DIR),
+    ):
+        if filename:
+            (directory / filename).unlink(missing_ok=True)
+
+    return True

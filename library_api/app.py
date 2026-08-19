@@ -146,6 +146,26 @@ def get_epub(story_id: str):
     )
 
 
+def _check_internal_request(story_id: str, x_internal_token: str | None) -> None:
+    """Shared guard for every /internal/* route: the token check and the
+    story_id shape check. Factored out once a second internal route
+    (the retire-on-thread-delete one below) needed the exact same pair."""
+    if not INTERNAL_API_TOKEN:
+        raise HTTPException(503, "ingest disabled: INTERNAL_API_TOKEN not configured")
+    # Constant-time compare -- `!=` on secrets leaks timing information an
+    # attacker could in principle use to guess the token byte by byte.
+    # Impractical over normal internet latency jitter for a 192-bit token,
+    # but there's no reason to rely on that instead of just using the
+    # comparison built for this.
+    if not x_internal_token or not hmac.compare_digest(x_internal_token, INTERNAL_API_TOKEN):
+        raise HTTPException(403, "invalid or missing X-Internal-Token")
+    if not _SAFE_STORY_ID.match(story_id):
+        # See _SAFE_STORY_ID's comment above -- this is the second,
+        # independent control against a crafted story_id escaping
+        # DATA_DIR via the filenames ingest_story() builds from it.
+        raise HTTPException(400, "story_id must match ^[A-Za-z0-9_-]{1,128}$")
+
+
 @app.post("/internal/ingest")
 async def internal_ingest(
     story_id: str = Form(...),
@@ -162,20 +182,7 @@ async def internal_ingest(
     of its own. It is NOT meant to be reachable by anything else; that
     trust boundary is the whole reason for the token check below.
     """
-    if not INTERNAL_API_TOKEN:
-        raise HTTPException(503, "ingest disabled: INTERNAL_API_TOKEN not configured")
-    # Constant-time compare -- `!=` on secrets leaks timing information an
-    # attacker could in principle use to guess the token byte by byte.
-    # Impractical over normal internet latency jitter for a 192-bit token,
-    # but there's no reason to rely on that instead of just using the
-    # comparison built for this.
-    if not x_internal_token or not hmac.compare_digest(x_internal_token, INTERNAL_API_TOKEN):
-        raise HTTPException(403, "invalid or missing X-Internal-Token")
-    if not _SAFE_STORY_ID.match(story_id):
-        # See _SAFE_STORY_ID's comment above -- this is the second,
-        # independent control against a crafted story_id escaping
-        # DATA_DIR via the filenames ingest_story() builds from it.
-        raise HTTPException(400, "story_id must match ^[A-Za-z0-9_-]{1,128}$")
+    _check_internal_request(story_id, x_internal_token)
 
     image_bytes = await image.read() if image is not None else None
     updated_iso = updated or datetime.now(timezone.utc).isoformat()
@@ -200,6 +207,29 @@ async def internal_ingest(
         "kepub_file": story.kepub_file,
         "azw3_file": story.azw3_file,
     }
+
+
+@app.delete("/internal/stories/{story_id}")
+def internal_retire_story(story_id: str, x_internal_token: str | None = Header(None)):
+    """Retires a catalog entry (and its cover/epub/kepub/azw3 files) whose
+    originating #stories thread no longer exists on Discord.
+
+    Called by the portrait bot's on_thread_delete/on_raw_thread_delete
+    handlers when the *whole* thread disappears -- typically because its
+    starter post was deleted, which takes the entire forum thread with it
+    -- as opposed to a message-within-thread delete, which just triggers a
+    reassembly via /internal/ingest instead. Without this route, that kind
+    of thread deletion left an orphaned catalog entry behind forever: found
+    for real 2026-08-19, when an author deleted-and-reposted under the same
+    title and the old post's entry sat there duplicating the new one until
+    it was cleaned up by hand.
+    """
+    _check_internal_request(story_id, x_internal_token)
+
+    removed = storage.delete_story(story_id)
+    if not removed:
+        raise HTTPException(404, "unknown story")
+    return {"id": story_id, "deleted": True}
 
 
 @app.get("/feed.xml")
