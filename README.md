@@ -55,6 +55,11 @@ seed/
                        bypassing HTTP, so there's a fast local path that
                        doesn't need the portrait bot wired up
   catalog_seed/         two sample stories used by simulate.py
+web/
+  index.html/app.js/style.css   the browser library + reader embed, see
+                                 "Web embed" below — plain HTML/JS/CSS, no
+                                 build step, served straight off disk by
+                                 library_api's own StaticFiles mount
 ```
 
 ## Setup
@@ -110,6 +115,52 @@ links) would come back as bare `/covers/{id}` etc., which 404 when a
 client (correctly) hits them against the public host. Only affects those
 generated URL strings — the routes themselves (`GET /covers/{id}`, ...)
 are unprefixed and work the same locally either way.
+
+## Web embed
+
+A browsable, scrollable story grid with an in-browser reader
+([epub.js](https://github.com/futurepress/epub.js)) and a direct
+"Download EPUB" button, meant to be dropped into another website as one
+`<iframe>` — a proof of concept for embedding the library on the main
+Auldwyn site, not a general public feature announcement yet. `web/` is
+plain HTML/CSS/JS with no build step, so it's something a non-Node site
+owner can open and read directly rather than bundler output; it's served
+straight off disk by `library_api`'s own `StaticFiles` mount at
+`/embed`, meaning no separate process, container, or deploy step — it
+comes up automatically with `library_api` itself.
+
+Embed it with:
+
+```html
+<iframe src="https://waffleserver1.tail04c8c3.ts.net:8443/library/embed/"
+        style="width:100%; height:800px; border:0"></iframe>
+```
+
+(swap in whatever host/path this ends up actually published at if that
+changes — see "Public access" above for the general shape).
+
+**Why `/embed`, not `/`:** every other route in this file is deliberately
+unprefixed (see `PUBLIC_URL_PREFIX`'s comment above) so it works the same
+locally and behind the public Funnel path mount; `/embed` follows that
+same rule rather than being a special case. `web/app.js`'s top comment
+explains how its own `fetch("../api/stories")` call resolves correctly
+under both the bare local URL and the public `/library`-prefixed one,
+using nothing but standard relative-URL resolution — no server-detected
+prefix logic needed on the client side. Cover/EPUB links don't need that
+trick at all: `GET /api/stories`'s `cover_url`/`epub_url` fields already
+carry the correct prefix server-side, so the page just uses those as-is.
+
+**Not yet verified**: real in-browser rendering. This dev environment has
+no headless browser or JS runtime to actually execute `app.js` against
+epub.js — what's been checked is that every route the page depends on
+(`/embed/`, `/embed/app.js`, `/embed/style.css`, `/embed/assets/...`,
+`/api/stories`) serves the right content/content-type from a locally run
+server seeded via `seed/simulate.py`, and that the relative-URL scheme
+above resolves exactly as intended (checked directly with
+`urllib.parse.urljoin`) for both the local and publicly-prefixed cases.
+Actually opening the page in a real browser and confirming epub.js reads
+a story, paginates, and the download button saves a working file is the
+next check before calling this more than a proof of concept.
 
 ## Title / author / cover convention
 
@@ -297,6 +348,32 @@ command would rebuild *and restart* the already-running, publicly
 Funnel-exposed `library_api` container too, not just add the new
 service — restarting a live public service is the kind of thing to
 confirm before doing, not fold into a verification pass.
+
+**2026-08-20, web embed added** — `web/` (grid + epub.js reader +
+download button) and `library_api/app.py`'s `/embed` `StaticFiles`
+mount:
+- Ran `library_api` for real locally (`uvicorn`, `LIBRARY_DATA_DIR`
+  pointed at a scratch dir) against `seed/simulate.py`'s two real seeded
+  stories — confirmed every route the page depends on actually serves
+  with the right status/content-type: `/embed/` → `text/html`,
+  `/embed/app.js` → `text/javascript`, `/embed/style.css` → `text/css`,
+  `/embed/assets/auldwyn-logo.png` → `image/png`,
+  `/embed/assets/fonts/Cinzel[wght].ttf` → `font/ttf`. Also confirmed no
+  regression on the pre-existing routes (`/health`, `/api/stories`,
+  `/covers/{id}`, `/books/{id}.epub`, `/feed.xml`) — none collide with
+  the new `/embed` mount.
+- The relative-URL scheme `app.js` depends on (`fetch("../api/stories")`
+  resolving correctly whether the page is at the bare local `/embed/` or
+  the public Funnel-prefixed `/library/embed/`) checked directly with
+  `urllib.parse.urljoin()` against both forms — confirmed it lands on
+  `/api/stories` and `/library/api/stories` respectively, exactly as
+  intended.
+- **Not verified**: actually opening the page in a real browser. This
+  dev environment has no headless browser or JS runtime available to
+  execute `app.js` — whether epub.js actually renders a story,
+  pagination/keyboard nav work, and the download button saves a real
+  file all still need a real-browser check before this is more than a
+  proof of concept. See "Web embed" above.
 
 ## Only Linux kepubify is bundled
 
