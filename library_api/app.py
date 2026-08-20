@@ -35,6 +35,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from fastapi import FastAPI, Form, HTTPException, Header, UploadFile
 from fastapi.responses import FileResponse, Response
+from fastapi.staticfiles import StaticFiles
 
 from common import storage
 from common.ingest import ingest_story
@@ -258,3 +259,19 @@ def atom_feed():
   <updated>{escape(latest)}</updated>{entries}
 </feed>"""
     return Response(content=xml, media_type="application/atom+xml")
+
+
+# Static site: the library grid + in-browser epub.js reader + download
+# buttons meant to be dropped into another site as a single
+# `<iframe src=".../embed/">`. Mounted at the bare, unprefixed "/embed"
+# path -- same convention every other route in this file follows (see
+# PUBLIC_URL_PREFIX's comment above) -- which the public Tailscale Funnel
+# mount then exposes as ".../library/embed/". web/app.js's top comment
+# explains how its own fetches find "/api/stories" etc correctly under
+# either path. html=True serves web/index.html for both "/embed" and
+# "/embed/" instead of a bare directory listing.
+app.mount(
+    "/embed",
+    StaticFiles(directory=Path(__file__).resolve().parent.parent / "web", html=True),
+    name="embed",
+)

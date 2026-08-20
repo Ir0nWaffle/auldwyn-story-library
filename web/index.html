@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<!--
+  Auldwyn Library web embed -- a scrollable story grid plus an in-browser
+  reader (epub.js) and a direct EPUB download, all in one page. Meant to
+  be dropped into another site as a single iframe:
+
+    <iframe src="https://<this host>/library/embed/" style="width:100%;
+      height:800px; border:0"></iframe>
+
+  Deliberately no build step -- plain HTML/CSS/JS, so it stays something
+  a non-Node site owner can open and read, not a bundler output. Talks
+  only to this same FastAPI app's own public GET routes (see app.js's
+  top comment for how it finds them regardless of whether it's mounted
+  at the container root or behind the public /library path prefix).
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Auldwyn Library</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <img class="wordmark" src="assets/auldwyn-logo.png" alt="Auldwyn"
+         onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'wordmark-fallback',textContent:'AULDWYN'}))">
+    <p class="tagline">Stories from Auldwyn — read in your browser, or take one with you.</p>
+  </header>
+
+  <!-- Library grid: the default view. -->
+  <main id="library-view">
+    <div id="status" class="status" hidden></div>
+    <div id="grid" class="grid"></div>
+  </main>
+
+  <!-- Reader: hidden until a story is opened; app.js toggles which of
+       these two <main>s is visible rather than navigating to a new
+       page, so the iframe never has to reload or resize awkwardly. -->
+  <main id="reader-view" hidden>
+    <div class="reader-bar">
+      <button id="back-btn" class="btn btn-ghost">‹ Back to Library</button>
+      <h2 id="reader-title"></h2>
+      <a id="reader-download" class="btn btn-gold" download>Download EPUB</a>
+    </div>
+    <div class="reader-body">
+      <button id="prev-btn" class="page-nav page-nav-prev" aria-label="Previous page">‹</button>
+      <div id="viewer"></div>
+      <button id="next-btn" class="page-nav page-nav-next" aria-label="Next page">›</button>
+    </div>
+  </main>
+
+  <!-- epub.js + its JSZip dependency, from a CDN -- this is a real
+       hosted page (not a sandboxed artifact), so a CDN script is fine;
+       vendoring these locally is a reasonable follow-up once this is
+       past proof-of-concept, so a bad CDN day can't take the reader
+       down, but isn't worth the extra repo weight yet. -->
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/epubjs@0.3.93/dist/epub.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

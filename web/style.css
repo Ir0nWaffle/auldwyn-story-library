@@ -1,0 +1,177 @@
+/* Same palette as the desktop picker app (see auldwyn-story-picker/gui.py's
+   INK/PANEL/GOLD/CREAM/MUTED/ACCENT constants) -- one brand look across
+   both surfaces. Fonts are the same two cover_gen.py already uses for
+   generated cover art: Cinzel (Decorative for the wordmark/titles,
+   regular for headings) and EB Garamond for body text. */
+
+@font-face {
+  font-family: "Cinzel Decorative";
+  src: url("assets/fonts/CinzelDecorative-Bold.ttf") format("truetype");
+  font-weight: 700;
+}
+@font-face {
+  font-family: "Cinzel";
+  src: url("assets/fonts/Cinzel[wght].ttf") format("truetype");
+  font-weight: 400 700;
+}
+@font-face {
+  font-family: "EB Garamond";
+  src: url("assets/fonts/EBGaramond[wght].ttf") format("truetype");
+  font-weight: 400 700;
+}
+
+:root {
+  --ink: #171310;
+  --panel: #231d18;
+  --gold: #c8a35a;
+  --cream: #ece3d2;
+  --muted: #8b7f6c;
+  --accent: #2f2820;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--ink);
+  color: var(--cream);
+  font-family: "EB Garamond", Georgia, serif;
+}
+
+.site-header {
+  padding: 20px 28px 12px;
+  border-bottom: 1px solid var(--accent);
+}
+.wordmark { height: 48px; display: block; }
+.wordmark-fallback {
+  font-family: "Cinzel Decorative", serif;
+  font-size: 26px;
+  color: var(--gold);
+  letter-spacing: 3px;
+}
+.tagline { color: var(--muted); font-size: 14px; margin: 10px 0 0; }
+
+#library-view { padding: 20px 28px 40px; }
+
+.status {
+  background: var(--accent);
+  color: var(--cream);
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+.status.error { background: #3a2a2a; }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 20px;
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+}
+.card img.cover {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  border-radius: 4px;
+  background: var(--accent);
+  margin-bottom: 10px;
+}
+.card h3 {
+  font-family: "Cinzel", serif;
+  font-size: 16px;
+  margin: 0 0 4px;
+  color: var(--cream);
+}
+.card .author { color: var(--gold); font-size: 13px; margin: 0 0 8px; }
+.card .summary {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0 0 14px;
+  flex-grow: 1;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.card .card-actions { display: flex; gap: 8px; }
+
+.btn {
+  display: inline-block;
+  text-align: center;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-family: "EB Garamond", serif;
+  text-decoration: none;
+  cursor: pointer;
+  border: 1px solid var(--gold);
+  background: var(--accent);
+  color: var(--cream);
+  flex: 1;
+}
+.btn:hover { background: #3a3024; }
+.btn-gold {
+  background: var(--gold);
+  color: var(--ink);
+  font-weight: 600;
+  border: none;
+}
+.btn-gold:hover { background: #d8b876; }
+.btn-ghost { background: transparent; flex: 0 0 auto; }
+
+/* --- reader --- */
+
+#reader-view {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.reader-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--accent);
+}
+.reader-bar h2 {
+  font-family: "Cinzel", serif;
+  font-size: 16px;
+  margin: 0;
+  flex-grow: 1;
+  text-align: center;
+  color: var(--cream);
+}
+.reader-bar .btn { flex: 0 0 auto; }
+
+.reader-body {
+  flex-grow: 1;
+  display: flex;
+  align-items: stretch;
+  min-height: 0;
+  position: relative;
+}
+#viewer {
+  flex-grow: 1;
+  min-width: 0;
+  background: var(--cream);
+}
+.page-nav {
+  flex: 0 0 auto;
+  width: 44px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 28px;
+  cursor: pointer;
+}
+.page-nav:hover { color: var(--gold); }
