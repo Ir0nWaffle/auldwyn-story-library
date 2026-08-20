@@ -2,10 +2,15 @@
 <!--
   Auldwyn Library web embed -- a scrollable story grid plus an in-browser
   reader (epub.js) and a direct EPUB download, all in one page. Meant to
-  be dropped into another site as a single iframe:
+  be dropped into another site as a single iframe. Include
+  allow="fullscreen" (and the legacy allowfullscreen attribute, for older
+  browsers that don't recognize allow=) -- without it, the reader's Full
+  Screen button silently fails to do anything, since the Fullscreen API
+  is blocked by permissions policy inside an iframe that doesn't
+  explicitly grant it:
 
     <iframe src="https://<this host>/library/embed/" style="width:100%;
-      height:800px; border:0"></iframe>
+      height:800px; border:0" allow="fullscreen" allowfullscreen></iframe>
 
   Deliberately no build step -- plain HTML/CSS/JS, so it stays something
   a non-Node site owner can open and read, not a bundler output. Talks
@@ -16,37 +21,80 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- viewport-fit=cover opts the page into drawing under the notch/
+       gesture-bar safe areas on phones that have them, instead of the
+       browser reserving a plain black bar there -- see style.css's
+       env(safe-area-inset-*) rules, which only matter with this set. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Auldwyn Library</title>
+  <!-- Noto Serif, variable weight -- the one typeface auldwyn.net itself
+       uses throughout (headings and body alike, per its own body{}
+       rule), matching its visual language rather than the desktop
+       picker app's separate Cinzel/EB Garamond pairing this page used
+       before. auldwyn.net self-hosts its own copy of this font file;
+       Google Fonts serves the same typeface, used here instead of
+       trying to source or copy their actual asset file. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@100..900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
+  <!-- Page-level, not inside either view below -- fullscreen errors need
+       to show up while #reader-view is active, catalog-load errors while
+       #library-view is; a fixed-position toast outside both works for
+       either rather than needing one status element per view. -->
+  <div id="status" class="status" hidden></div>
+
+  <!-- Hidden outright (not just scrolled past) the moment a story opens
+       -- see body.reading-mode in style.css -- so "Read" really does
+       turn the whole frame into the reader, not just add a reader
+       section below this. -->
   <header class="site-header">
     <img class="wordmark" src="assets/auldwyn-logo.png" alt="Auldwyn"
          onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'wordmark-fallback',textContent:'AULDWYN'}))">
-    <p class="tagline">Stories from Auldwyn — read in your browser, or take one with you.</p>
+    <p class="kicker">Stories from Auldwyn</p>
   </header>
 
   <!-- Library grid: the default view. -->
   <main id="library-view">
-    <div id="status" class="status" hidden></div>
     <div id="grid" class="grid"></div>
   </main>
 
   <!-- Reader: hidden until a story is opened; app.js toggles which of
-       these two <main>s is visible rather than navigating to a new
-       page, so the iframe never has to reload or resize awkwardly. -->
+       these two <main>s is visible (and the header above) rather than
+       navigating to a new page, so the iframe never has to reload. -->
   <main id="reader-view" hidden>
     <div class="reader-bar">
-      <button id="back-btn" class="btn btn-ghost">‹ Back to Library</button>
+      <div class="reader-bar-group">
+        <button id="back-btn" class="btn btn-ghost">‹ Library</button>
+        <button id="prev-btn" class="btn btn-ghost">‹ Prev</button>
+        <button id="next-btn" class="btn btn-ghost">Next ›</button>
+      </div>
       <h2 id="reader-title"></h2>
-      <a id="reader-download" class="btn btn-gold" download>Download EPUB</a>
+      <div class="reader-bar-group">
+        <button id="theme-btn" class="btn btn-ghost">🌙 Dark Mode</button>
+        <button id="fullscreen-btn" class="btn btn-ghost">⛶ Full Screen</button>
+        <a id="reader-download" class="btn btn-gold" download>Download EPUB</a>
+      </div>
     </div>
     <div class="reader-body">
-      <button id="prev-btn" class="page-nav page-nav-prev" aria-label="Previous page">‹</button>
       <div id="viewer"></div>
-      <button id="next-btn" class="page-nav page-nav-next" aria-label="Next page">›</button>
+      <!-- Transparent, sit above #viewer -- epub.js renders each page
+           inside its own iframe, and a tap/click landing on that iframe's
+           content never bubbles to this outer document (different
+           document entirely), so page-turn/reveal-controls taps have to
+           be caught up here instead of relying on the book content
+           itself. Left/right thirds turn pages; the middle third just
+           reveals the (fullscreen-only) auto-hiding toolbar, the touch
+           equivalent of the mousemove listener app.js attaches for a
+           mouse. All three always call showControls() regardless of
+           fullscreen state -- harmless/no-op when the toolbar's already
+           permanently visible in the normal windowed view. -->
+      <div id="tap-prev" class="tap-zone tap-zone-prev" aria-label="Previous page"></div>
+      <div id="tap-toggle" class="tap-zone tap-zone-toggle" aria-label="Show controls"></div>
+      <div id="tap-next" class="tap-zone tap-zone-next" aria-label="Next page"></div>
     </div>
   </main>
 

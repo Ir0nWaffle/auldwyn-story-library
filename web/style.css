@@ -1,68 +1,112 @@
-/* Same palette as the desktop picker app (see auldwyn-story-picker/gui.py's
-   INK/PANEL/GOLD/CREAM/MUTED/ACCENT constants) -- one brand look across
-   both surfaces. Fonts are the same two cover_gen.py already uses for
-   generated cover art: Cinzel (Decorative for the wordmark/titles,
-   regular for headings) and EB Garamond for body text. */
-
-@font-face {
-  font-family: "Cinzel Decorative";
-  src: url("assets/fonts/CinzelDecorative-Bold.ttf") format("truetype");
-  font-weight: 700;
-}
-@font-face {
-  font-family: "Cinzel";
-  src: url("assets/fonts/Cinzel[wght].ttf") format("truetype");
-  font-weight: 400 700;
-}
-@font-face {
-  font-family: "EB Garamond";
-  src: url("assets/fonts/EBGaramond[wght].ttf") format("truetype");
-  font-weight: 400 700;
-}
+/* Palette + typography pulled from auldwyn.net's own CSS (its body{}
+   background/text/font rule, and the button/card/kicker-label patterns
+   used across its hero and content sections) -- not the desktop picker
+   app's separate gold/ink/Cinzel branding this page used before. Real
+   values, not a guess: body bg #171717, header #101010, body text
+   #d8d4cc, one serif typeface (Noto Serif) for everything rather than a
+   display/body font pairing, gold used as translucent rgba(208,173,112,
+   ...) washes over the dark background rather than solid fills, sharp-
+   cornered pill buttons but ~14px-rounded content cards, and small
+   uppercase/letter-spaced "kicker" labels ahead of headings. */
 
 :root {
-  --ink: #171310;
-  --panel: #231d18;
-  --gold: #c8a35a;
-  --cream: #ece3d2;
-  --muted: #8b7f6c;
-  --accent: #2f2820;
+  --bg: #171717;        /* page background */
+  --bg-deep: #101010;    /* header */
+  --panel-tint: rgba(208, 173, 112, 0.03); /* card background -- the page's own dark bg, just barely gold-tinted */
+  --text: #d8d4cc;       /* body text */
+  --heading: #efece5;    /* card/section titles */
+  --muted: #b9b4aa;       /* card description copy */
+  --gold: #b79358;        /* kicker-label color */
+  --gold-light: #d0ad70;  /* interactive: links, button text/border, hover */
+  --border-hairline: rgba(255, 255, 255, 0.09); /* plain dividers */
+  --border-gold: rgba(208, 173, 112, 0.16);      /* card/button borders at rest */
+  --border-gold-hover: rgba(208, 173, 112, 0.5); /* card/button borders on hover */
+  --wash-gold: rgba(208, 173, 112, 0.14);   /* primary-button fill */
+  --wash-gold-hover: rgba(208, 173, 112, 0.24);
 }
 
 * { box-sizing: border-box; }
 
-html, body {
+html { height: 100%; }
+body {
   margin: 0;
-  height: 100%;
-  background: var(--ink);
-  color: var(--cream);
-  font-family: "EB Garamond", Georgia, serif;
+  /* 100vh on mobile is the *layout* viewport, which doesn't shrink when
+     the browser's address bar is showing -- so body claims more height
+     than is actually visible, and the scrollable views below never
+     reveal the bottom slice that's hidden behind that bar (the "can't
+     scroll far enough to reach Read/Download" bug). 100dvh tracks the
+     *dynamic*, actually-visible viewport instead, updating live as the
+     address bar shows/hides. Kept as a second declaration rather than
+     the only one -- an engine that doesn't recognize `dvh` treats the
+     whole declaration as invalid and ignores it, silently falling back
+     to the 100vh line above; no @supports needed for that fallback. */
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden; /* the two views below each own their own scrolling */
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Noto Serif", Georgia, serif;
 }
 
 .site-header {
-  padding: 20px 28px 12px;
-  border-bottom: 1px solid var(--accent);
+  flex: 0 0 auto;
+  padding: 20px 28px 16px;
+  background: var(--bg-deep);
+  border-bottom: 1px solid var(--border-hairline);
 }
-.wordmark { height: 48px; display: block; }
-.wordmark-fallback {
-  font-family: "Cinzel Decorative", serif;
-  font-size: 26px;
-  color: var(--gold);
-  letter-spacing: 3px;
-}
-.tagline { color: var(--muted); font-size: 14px; margin: 10px 0 0; }
+/* The whole point of reading mode: the header goes away entirely rather
+   than just scrolling out of view, so #reader-view (flex: 1 1 auto
+   below) actually gets the full frame instead of whatever's left under
+   a header that's still eating vertical space. */
+body.reading-mode .site-header { display: none; }
 
-#library-view { padding: 20px 28px 40px; }
+.wordmark { height: 40px; display: block; }
+.wordmark-fallback {
+  font: 800 22px/1 "Noto Serif", Georgia, serif;
+  color: var(--gold-light);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+/* Small uppercase, letter-spaced label -- auldwyn.net's own recurring
+   pattern ahead of a heading/section (its "Server", "Story" labels use
+   this exact treatment: font-weight 800, ~.16em tracking, gold, tiny). */
+.kicker {
+  margin: 10px 0 0;
+  color: var(--gold);
+  font: 800 11px/1.3 "Noto Serif", Georgia, serif;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+#library-view {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto; /* the "scrollable library" itself */
+  /* env(safe-area-inset-bottom) is 0 on anything without a home-
+     indicator/gesture-bar, so this is a no-op there -- on phones that
+     do have one, it keeps the last row's Read/Download buttons from
+     landing underneath it. */
+  padding: 20px 28px calc(40px + env(safe-area-inset-bottom));
+}
 
 .status {
-  background: var(--accent);
-  color: var(--cream);
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  max-width: min(90vw, 480px);
+  background: var(--bg-deep);
+  color: var(--text);
   padding: 10px 14px;
-  border-radius: 6px;
+  border: 1px solid var(--border-gold);
+  border-radius: 8px;
   font-size: 14px;
-  margin-bottom: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
-.status.error { background: #3a2a2a; }
+.status.error { border-color: rgba(184, 74, 69, 0.5); } /* the same rust auldwyn.net uses for its "live" status dot */
 
 .grid {
   display: grid;
@@ -71,32 +115,41 @@ html, body {
 }
 
 .card {
-  background: var(--panel);
-  border: 1px solid var(--accent);
-  border-radius: 8px;
-  padding: 14px;
+  background: var(--panel-tint);
+  border: 1px solid var(--border-gold);
+  border-radius: 14px;
+  padding: 18px;
   display: flex;
   flex-direction: column;
+  transition: border-color 0.2s ease;
 }
+.card:hover { border-color: var(--border-gold-hover); }
 .card img.cover {
   width: 100%;
   aspect-ratio: 2 / 3;
   object-fit: cover;
-  border-radius: 4px;
-  background: var(--accent);
-  margin-bottom: 10px;
+  border-radius: 8px;
+  background: var(--bg-deep);
+  margin-bottom: 12px;
 }
 .card h3 {
-  font-family: "Cinzel", serif;
   font-size: 16px;
+  font-weight: 600;
   margin: 0 0 4px;
-  color: var(--cream);
+  color: var(--heading);
 }
-.card .author { color: var(--gold); font-size: 13px; margin: 0 0 8px; }
+.card .author {
+  margin: 0 0 10px;
+  color: var(--gold);
+  font: 800 11px/1.3 "Noto Serif", Georgia, serif;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
 .card .summary {
   color: var(--muted);
   font-size: 13px;
-  margin: 0 0 14px;
+  line-height: 1.6;
+  margin: 0 0 16px;
   flex-grow: 1;
   display: -webkit-box;
   -webkit-line-clamp: 3;
@@ -106,72 +159,178 @@ html, body {
 .card .card-actions { display: flex; gap: 8px; }
 
 .btn {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   text-align: center;
-  border-radius: 6px;
-  padding: 8px 14px;
-  font-size: 13px;
-  font-family: "EB Garamond", serif;
+  padding: 9px 14px;
+  font: 800 11px/1 "Noto Serif", Georgia, serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   text-decoration: none;
   cursor: pointer;
-  border: 1px solid var(--gold);
-  background: var(--accent);
-  color: var(--cream);
+  border: 1px solid var(--border-gold-hover);
+  background: transparent;
+  color: var(--gold-light);
   flex: 1;
+  transition: background 0.2s ease;
 }
-.btn:hover { background: #3a3024; }
+.btn:hover { background: rgba(208, 173, 112, 0.1); }
 .btn-gold {
-  background: var(--gold);
-  color: var(--ink);
-  font-weight: 600;
-  border: none;
+  border-color: var(--gold-light);
+  background: var(--wash-gold);
 }
-.btn-gold:hover { background: #d8b876; }
-.btn-ghost { background: transparent; flex: 0 0 auto; }
+.btn-gold:hover { background: var(--wash-gold-hover); }
+.btn-ghost { flex: 0 0 auto; }
 
 /* --- reader --- */
 
 #reader-view {
-  height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
+/* The [hidden] attribute's own UA-stylesheet rule (`[hidden]{display:
+   none}`) loses to the ID selector above once JS clears the attribute
+   -- fine -- but while the attribute IS present, `#reader-view` being a
+   more specific selector than the UA's own bare-attribute one is what
+   actually keeps it hidden; this rule just makes that not depend on
+   which stylesheet the browser happens to prioritize. */
+#reader-view[hidden] { display: none; }
+
 .reader-bar {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 12px 20px;
-  border-bottom: 1px solid var(--accent);
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  padding: 10px 16px;
+  background: var(--bg-deep);
+  border-bottom: 1px solid var(--border-hairline);
 }
+.reader-bar-group { display: flex; gap: 8px; flex: 0 0 auto; }
 .reader-bar h2 {
-  font-family: "Cinzel", serif;
-  font-size: 16px;
+  font-size: 15px;
+  font-weight: 600;
   margin: 0;
-  flex-grow: 1;
+  flex: 1 1 auto;
+  min-width: 120px;
   text-align: center;
-  color: var(--cream);
+  color: var(--heading);
 }
-.reader-bar .btn { flex: 0 0 auto; }
+.reader-bar .btn { flex: 0 0 auto; white-space: nowrap; }
 
 .reader-body {
-  flex-grow: 1;
-  display: flex;
-  align-items: stretch;
+  flex: 1 1 auto;
   min-height: 0;
-  position: relative;
+  position: relative; /* anchors the tap zones below */
 }
 #viewer {
-  flex-grow: 1;
-  min-width: 0;
-  background: var(--cream);
+  width: 100%;
+  height: 100%;
+  background: #e7e2d8; /* auldwyn.net's own lightest greige tone, used as the "light" reading surface */
 }
-.page-nav {
-  flex: 0 0 auto;
-  width: 44px;
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  font-size: 28px;
-  cursor: pointer;
+/* Kept in sync with the epub.js theme selected in app.js (see
+   applyReaderTheme() there) -- epub.js's own theme only recolors the
+   book's rendered page itself, inside its iframe; #viewer's background
+   is this outer container, visible in any margin/gap around that page
+   (pagination column gaps, a page shorter than the viewport, etc), so
+   without this a dark reading theme would still show the light tone
+   bleeding through around the edges. var(--bg) here is a deliberate
+   choice, not just "a dark color" -- it's auldwyn.net's own actual page
+   background, so "dark mode" for reading ends up matching the site's
+   own default look exactly. */
+#viewer.theme-dark { background: var(--bg); }
+
+/* Invisible page-turn/reveal-controls zones layered over #viewer -- see
+   index.html's comment on why taps have to be caught here rather than
+   inside the book content itself. Stacked above #viewer purely by DOM
+   order (both are in the same stacking context; the absolutely
+   positioned siblings below paint after the static #viewer) -- explicit
+   z-index all the same, so that stays true even if this ever gets
+   reordered. */
+.tap-zone { position: absolute; top: 0; bottom: 0; z-index: 1; cursor: pointer; }
+.tap-zone-prev { left: 0; width: 30%; }
+.tap-zone-toggle { left: 30%; width: 40%; }
+.tap-zone-next { right: 0; width: 30%; }
+
+/* Full Screen button target -- see app.js. Both the unprefixed and
+   -webkit-prefixed pseudo-classes, since Safari versions still in real
+   use only recognize the prefixed one. Restates the page background
+   (the fullscreen element otherwise renders on whatever the browser's
+   own fullscreen-backdrop default is, which varies) and makes sure the
+   flex layout that lays out .reader-bar/.reader-body still applies at
+   the size the browser grows #reader-view to -- it does by default,
+   this is just insurance against a browser UA stylesheet override. */
+#reader-view:fullscreen,
+#reader-view:-webkit-full-screen {
+  width: 100%;
+  height: 100%;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  position: relative; /* anchors .reader-bar's fullscreen overlay below */
 }
-.page-nav:hover { color: var(--gold); }
+
+/* Fullscreen only: the toolbar leaves the normal document flow (docked
+   at the top, always taking up its own row) and becomes an overlay
+   pinned to the BOTTOM, translucent over the book instead of a solid
+   bar competing with it for space -- the actual fix for "it covers most
+   of the screen but there's still a header at the top": a header that's
+   still in normal flow is still eating real vertical space regardless
+   of how the rest of the page is sized. Kept out of the windowed/
+   embedded view entirely (unscoped .reader-bar above keeps its normal
+   docked-at-top layout there) since that view has nowhere better to put
+   it and no mouse-move/tap-elsewhere way to un-hide it on a touchscreen. */
+#reader-view:fullscreen .reader-bar,
+#reader-view:-webkit-full-screen .reader-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  border-bottom: none;
+  background: linear-gradient(to top, rgba(23, 23, 23, 0.92), rgba(23, 23, 23, 0));
+  /* 32px for the gradient to fade in above the buttons, PLUS whatever
+     the notch/status-bar safe area (below) adds on top of that -- calc()
+     rather than a second competing padding-top declaration further down,
+     which would just silently win over this one instead of combining
+     with it (equal-specificity selector, later in the file wins outright
+     rather than merging). env(...) is 0 with no such area, so this is
+     exactly 32px on an ordinary phone. */
+  padding-top: calc(32px + env(safe-area-inset-top));
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+/* .show-controls is toggled on #reader-view by app.js's idle timer --
+   present right when a book opens and after any interaction, removed a
+   couple of seconds after the last one. pointer-events: none while
+   hidden so an invisible toolbar can't still swallow taps meant for the
+   page-turn zones underneath it. */
+#reader-view:fullscreen:not(.show-controls) .reader-bar,
+#reader-view:-webkit-full-screen:not(.show-controls) .reader-bar {
+  opacity: 0;
+  transform: translateY(12px);
+  pointer-events: none;
+}
+/* Without viewport-fit=cover (see index.html) plus this, a phone with a
+   notch/gesture-bar/home-indicator draws its own solid-color bar over
+   those areas instead of letting the page's own background reach them
+   -- which reads as "fullscreen didn't actually fill the screen" even
+   though the Fullscreen API itself worked correctly. Padding rather
+   than margin, so the toolbar's buttons/title move clear of the notch
+   instead of just having background color drawn behind an unusable
+   strip. env(...) resolves to 0 on any device without that area (plain
+   phones, tablets, desktop), so this is a no-op there. (padding-top's
+   own safe-area handling lives above, combined with the gradient-fade
+   padding rather than declared separately here -- see that rule's
+   comment for why.) */
+#reader-view:fullscreen .reader-bar,
+#reader-view:-webkit-full-screen .reader-bar {
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+}
+#reader-view:fullscreen .reader-body,
+#reader-view:-webkit-full-screen .reader-body {
+  padding-bottom: env(safe-area-inset-bottom);
+}
