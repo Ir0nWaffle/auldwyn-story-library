@@ -38,11 +38,23 @@ def ingest_story(
 
     content_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
     existing = storage.get_story(story_id)
-    if existing and existing.content_hash == content_hash:
-        # Unchanged text on a re-save/edit event -- nothing to rebuild.
-        # (A change in `authors` with no change in `text` can't happen in
-        # practice: a new contributor's segment is what changes the text
-        # in the first place -- see the portrait bot's assemble_story().)
+    if (
+        existing
+        and existing.content_hash == content_hash
+        and existing.has_custom_cover == (image_bytes is not None)
+    ):
+        # Unchanged text AND unchanged cover-image availability on a
+        # re-save/edit event -- nothing to rebuild. (A change in `authors`
+        # with no change in `text` can't happen in practice: a new
+        # contributor's segment is what changes the text in the first
+        # place -- see the portrait bot's assemble_story().)
+        #
+        # The has_custom_cover check matters on top of the hash check: a
+        # backfill re-run (e.g. after story_forward.py's cover-image search
+        # widens to cover more of the thread, or a caller passes an image
+        # that simply wasn't available before) can find a cover for a story
+        # whose text hasn't changed at all -- a hash-only check would
+        # silently skip regenerating the cover/epub/kepub/azw3 in that case.
         return existing
 
     if summary is None:
