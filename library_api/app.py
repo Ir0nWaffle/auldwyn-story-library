@@ -33,8 +33,8 @@ from xml.sax.saxutils import escape
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from fastapi import FastAPI, Form, HTTPException, Header, UploadFile
-from fastapi.responses import FileResponse, Response
+from fastapi import FastAPI, Form, HTTPException, Header, Response, UploadFile
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from common import storage
@@ -67,6 +67,20 @@ PUBLIC_URL_PREFIX = os.environ.get("PUBLIC_URL_PREFIX", "").rstrip("/")
 # the token check below.
 _SAFE_STORY_ID = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 
+# /api/stories and the four asset routes below (cover/epub/kepub/azw3) all
+# serve mutable content behind a URL that's stable per story_id -- a cover
+# or book can be regenerated in place (an edit, or a backfill like the
+# cover-art-from-thread-images one) without the URL changing at all, since
+# story_id is the route key, not the content-hash-named file it currently
+# points to. Without an explicit Cache-Control, browsers are free to serve
+# a stale cached copy of that URL indefinitely instead of revalidating --
+# exactly what happened after the 2026-08-21 cover backfill: regenerated
+# covers landed on disk (confirmed on the server) but the embed page kept
+# showing the old ones until a hard refresh. "no-cache" (not "no-store")
+# still lets ETag/Last-Modified do their job -- it just forces a
+# revalidation round-trip instead of trusting a local copy blindly.
+_NO_CACHE_HEADERS = {"Cache-Control": "no-cache"}
+
 
 @app.get("/health")
 def health():
@@ -76,20 +90,23 @@ def health():
 @app.get("/api/stories")
 def list_stories():
     stories = sorted(storage.load_catalog(), key=lambda s: s.updated, reverse=True)
-    return [
-        {
-            "id": s.id,
-            "title": s.title,
-            "author": s.author,
-            "summary": s.summary,
-            "updated": s.updated,
-            "cover_url": f"{PUBLIC_URL_PREFIX}/covers/{s.id}",
-            "epub_url": f"{PUBLIC_URL_PREFIX}/books/{s.id}.epub",
-            "kepub_url": f"{PUBLIC_URL_PREFIX}/books/{s.id}.kepub.epub" if s.kepub_file else None,
-            "azw3_url": f"{PUBLIC_URL_PREFIX}/books/{s.id}.azw3" if s.azw3_file else None,
-        }
-        for s in stories
-    ]
+    return JSONResponse(
+        [
+            {
+                "id": s.id,
+                "title": s.title,
+                "author": s.author,
+                "summary": s.summary,
+                "updated": s.updated,
+                "cover_url": f"{PUBLIC_URL_PREFIX}/covers/{s.id}",
+                "epub_url": f"{PUBLIC_URL_PREFIX}/books/{s.id}.epub",
+                "kepub_url": f"{PUBLIC_URL_PREFIX}/books/{s.id}.kepub.epub" if s.kepub_file else None,
+                "azw3_url": f"{PUBLIC_URL_PREFIX}/books/{s.id}.azw3" if s.azw3_file else None,
+            }
+            for s in stories
+        ],
+        headers=_NO_CACHE_HEADERS,
+    )
 
 
 @app.get("/covers/{story_id}")
@@ -97,7 +114,7 @@ def get_cover(story_id: str):
     story = storage.get_story(story_id)
     if not story:
         raise HTTPException(404, "unknown story")
-    return FileResponse(storage.COVERS_DIR / story.cover_file, media_type="image/png")
+    return FileResponse(storage.COVERS_DIR / story.cover_file, media_type="image/png", headers=_NO_CACHE_HEADERS)
 
 
 @app.get("/books/{story_id}.kepub.epub")
@@ -115,6 +132,7 @@ def get_kepub(story_id: str):
         storage.BOOKS_DIR / story.kepub_file,
         media_type="application/epub+zip",
         filename=f"{story.title}.kepub.epub",
+        headers=_NO_CACHE_HEADERS,
     )
 
 
@@ -132,6 +150,7 @@ def get_azw3(story_id: str):
         storage.BOOKS_DIR / story.azw3_file,
         media_type="application/x-mobi8-ebook",
         filename=f"{story.title}.azw3",
+        headers=_NO_CACHE_HEADERS,
     )
 
 
@@ -144,6 +163,7 @@ def get_epub(story_id: str):
         storage.BOOKS_DIR / story.epub_file,
         media_type="application/epub+zip",
         filename=f"{story.title}.epub",
+        headers=_NO_CACHE_HEADERS,
     )
 
 
