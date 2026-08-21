@@ -9,6 +9,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY common ./common
 COPY library_api ./library_api
 COPY seed ./seed
+COPY web ./web
 
 RUN chmod +x /app/common/assets/kepubify-linux-64bit \
     && chown -R api:api /app
