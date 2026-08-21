@@ -92,6 +92,7 @@ def delete_story(story_id: str) -> bool:
 
     for filename, directory in (
         (match.cover_file, COVERS_DIR),
+        (match.thumb_file, COVERS_DIR),
         (match.epub_file, BOOKS_DIR),
         (match.kepub_file, BOOKS_DIR),
         (match.azw3_file, BOOKS_DIR),

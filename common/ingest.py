@@ -12,7 +12,7 @@ from pathlib import Path
 from . import storage
 from .authors import format_authors
 from .azw3 import to_azw3
-from .cover_gen import make_cover
+from .cover_gen import make_cover, make_thumbnail
 from .epub_builder import build_epub
 from .kepub import to_kepub
 from .models import Story
@@ -42,12 +42,14 @@ def ingest_story(
         existing
         and existing.content_hash == content_hash
         and existing.has_custom_cover == (image_bytes is not None)
+        and existing.thumb_file is not None
     ):
-        # Unchanged text AND unchanged cover-image availability on a
-        # re-save/edit event -- nothing to rebuild. (A change in `authors`
-        # with no change in `text` can't happen in practice: a new
-        # contributor's segment is what changes the text in the first
-        # place -- see the portrait bot's assemble_story().)
+        # Unchanged text AND unchanged cover-image availability AND
+        # already has a thumbnail on a re-save/edit event -- nothing to
+        # rebuild. (A change in `authors` with no change in `text` can't
+        # happen in practice: a new contributor's segment is what changes
+        # the text in the first place -- see the portrait bot's
+        # assemble_story().)
         #
         # The has_custom_cover check matters on top of the hash check: a
         # backfill re-run (e.g. after story_forward.py's cover-image search
@@ -55,6 +57,11 @@ def ingest_story(
         # that simply wasn't available before) can find a cover for a story
         # whose text hasn't changed at all -- a hash-only check would
         # silently skip regenerating the cover/epub/kepub/azw3 in that case.
+        #
+        # The thumb_file check exists purely to migrate pre-thumbnail
+        # entries (added 2026-08-21): the next time any such story is
+        # forwarded for any reason, this forces one rebuild to backfill
+        # its thumbnail, same trick as has_custom_cover above.
         return existing
 
     if summary is None:
@@ -66,6 +73,10 @@ def ingest_story(
     cover_bytes = make_cover(title, author_display, image_bytes)
     cover_filename = f"{story_id}-{content_hash}.png"
     (storage.COVERS_DIR / cover_filename).write_bytes(cover_bytes)
+
+    thumb_bytes = make_thumbnail(cover_bytes)
+    thumb_filename = f"{story_id}-{content_hash}-thumb.jpg"
+    (storage.COVERS_DIR / thumb_filename).write_bytes(thumb_bytes)
 
     epub_filename = f"{story_id}-{content_hash}.epub"
     epub_path = storage.BOOKS_DIR / epub_filename
@@ -102,6 +113,7 @@ def ingest_story(
         content_hash=content_hash,
         has_custom_cover=image_bytes is not None,
         cover_file=cover_filename,
+        thumb_file=thumb_filename,
         epub_file=epub_filename,
         kepub_file=kepub_path.name if kepub_path else None,
         azw3_file=azw3_filename,

@@ -111,9 +111,21 @@ def list_stories():
 
 @app.get("/covers/{story_id}")
 def get_cover(story_id: str):
+    # Serves the small JPEG thumbnail (see cover_gen.make_thumbnail) --
+    # this route's only consumers (the web embed grid and the desktop
+    # picker's grid) display it small, and the full 1600x2400 PNG badly
+    # bogs down clients reached through Tailscale Funnel's bandwidth-
+    # limited public path (found for real 2026-08-21, after a cover
+    # backfill pushed the custom-cover count up: covers silently never
+    # finished loading). Falls back to the full PNG for any entry that
+    # predates the thumbnail feature and hasn't been re-ingested since.
     story = storage.get_story(story_id)
     if not story:
         raise HTTPException(404, "unknown story")
+    if story.thumb_file:
+        return FileResponse(
+            storage.COVERS_DIR / story.thumb_file, media_type="image/jpeg", headers=_NO_CACHE_HEADERS
+        )
     return FileResponse(storage.COVERS_DIR / story.cover_file, media_type="image/png", headers=_NO_CACHE_HEADERS)
 
 

@@ -132,3 +132,28 @@ def make_cover(title: str, author: str, image_bytes: bytes | None) -> bytes:
         except Exception:
             pass  # corrupt/unsupported image -- fall through to generated cover
     return make_fallback_cover(title, author)
+
+
+def make_thumbnail(cover_png_bytes: bytes, max_width: int = 480) -> bytes:
+    """A small JPEG for grid display -- the covers/{id} HTTP route's only
+    consumers (the web embed and the desktop picker app) show it at
+    roughly this size, never the full 1600x2400 PNG. Serving the full
+    cover there was fine while custom-art covers were rare, but each one
+    is 1-3MB (painted art doesn't compress well as lossless PNG), and a
+    grid of two dozen of them -- 30-60MB -- badly bogs down any client
+    reached through Tailscale Funnel's bandwidth-limited public path.
+    Found for real 2026-08-21: covers silently never finished loading
+    over Funnel after a backfill pushed the custom-cover count up.
+
+    JPEG, not PNG, because this is a display thumbnail, not an archival
+    asset (the full-quality PNG is still what's embedded in the actual
+    EPUB/KEPUB/AZW3 -- built straight from cover_png_bytes, this function
+    is never in that path) -- lossy compression is the right trade here
+    and shrinks painted art far more than PNG can.
+    """
+    img = Image.open(io.BytesIO(cover_png_bytes)).convert("RGB")
+    ratio = max_width / img.width
+    img = img.resize((max_width, round(img.height * ratio)), Image.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=82)
+    return buf.getvalue()
